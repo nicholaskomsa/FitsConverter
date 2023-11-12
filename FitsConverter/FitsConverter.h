@@ -106,7 +106,7 @@ namespace FitsConverter {
 				//y = 1. -1 = 0 * 255 = 0
 
 				//store pixel data
-				int i = 0;
+				uint32_t i = 0;
 				uint8_t* bytes = reinterpret_cast<uint8_t*>(&i);
 				bytes[0] = r; // PFG_RGBA8_UNORM_SRGB
 				bytes[1] = g;
@@ -130,7 +130,6 @@ namespace FitsConverter {
 		std::vector<uint32_t> converted(imageData.size());
 
 		floatSpaceConvert(imageData, converted, nrgb, 0.0, 1.0, stripeNum);
-		//converted is a vector of of int32 data or RGBA, where A = 0
 
 		uint8_t* bytes = reinterpret_cast<uint8_t*>(converted.data());
 		//converted data are four byte type (int32)
