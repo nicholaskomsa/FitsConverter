@@ -13,7 +13,13 @@
 
 namespace FitsConverter {
 
-	void floatSpaceConvert(const std::span<float> data, std::span<uint32_t> converted, bool nickRgbMode = true, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1) {
+	enum class ColorizeMode {
+		NICKRGB,
+		ROYGBIV,
+		GREYSCALE
+	};
+
+	void floatSpaceConvert(const std::span<float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1) {
 
 		auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
 
@@ -53,35 +59,61 @@ namespace FitsConverter {
 			return percent;
 		};
 
-		if (nickRgbMode) {
+		auto clearAlpha = [&](uint32_t& i) {
+			reinterpret_cast<uint8_t*>(&i)[3] = 0;
+			};
+		auto setOpaque = [&](uint32_t& i) {
+			reinterpret_cast<uint8_t*>(&i)[3] = 255;
+			};		
+		auto rgb = [&](std::uint8_t r, std::uint8_t g, std::uint8_t b) {
 
-			uint32_t intmax = std::numeric_limits<uint32_t>::max();//max will use alpha
-			//get rid of alpha channel, rgb remains, a = 0 
-			intmax <<= 8;
-			intmax >>= 8;
+			std::uint32_t rgba = 0;
+			std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
+			bytes[0] = r; // PFG_RGBA8_UNORM_SRGB
+			bytes[1] = g;
+			bytes[2] = b;
 
-			std::for_each(std::execution::par, data.begin(), data.end(), [&, front = data.data()](auto& f) {
+			return rgba;
+			};
+
+		auto forEachPixel = [&](auto&& colorize) {
+
+			//we are running par on images/stripeNum instead of here
+			std::transform(std::execution::seq, data.begin(), data.end(), converted.begin(), [&](auto& f) {
 
 				auto percent = convertToGreyScale(f);
+
+				std::uint32_t rgba = colorize(percent);
+
+				//we want these pixels to be defined as completly non-transparent
+				setOpaque(rgba);
+				
+				return rgba;
+
+				});
+			};
+
+		switch (colorMode) {
+		case ColorizeMode::NICKRGB:{
+
+			uint32_t intMax = std::numeric_limits<uint32_t>::max();//max will use alpha
+			//we want to perfectly fit into rgb space, so
+			//get rid of alpha channel, rgb remains, a = 0 
+			clearAlpha(intMax);
+
+			forEachPixel([&](auto percent) {
 
 				//this is the nickrgb transform
-				uint32_t i = intmax * percent; 	//project onto integer	// int RGB
+				//project onto integer	// int RGB
 
-				//store pixel data
-				std::size_t index = &f - front;
-				converted[index] = i;
-				//set the alpha to opaque
-				reinterpret_cast<uint8_t*>(&converted[index])[3] = 255;
+				return intMax * percent;
+
 				});
+			}break;
 
-		}
-		else {
-			//set to roygbiv
-			std::for_each(std::execution::par, data.begin(), data.end(), [&, front = data.data()](auto& f) {
-
-				auto percent = convertToGreyScale(f);
-
-				//this is the roygbiv transform
+		case ColorizeMode::ROYGBIV: {
+			
+			forEachPixel([&](auto percent) {
 
 				uint8_t r = 0, g = 0, b = 0;
 
@@ -90,9 +122,7 @@ namespace FitsConverter {
 				int X = std::floor(a);	//this is the integer part
 				double Y = std::floor(255.0 * (a - X)); //fractional part from 0 to 255
 				switch (X) {
-				case 0:
-					r = 255; g = Y; b = 0;
-					break;
+				case 0: r = 255; g = Y; b = 0; break;
 				case 1: r = 255 - Y; g = 255; b = 0; break;
 				case 2: r = 0; g = 255; b = Y; break;
 				case 3: r = 0; g = 255 - Y; b = 255; break;
@@ -100,36 +130,46 @@ namespace FitsConverter {
 				case 5: r = 255; g = 0; b = 255; break;
 				}
 
-				//p = .8
-				//a = 1-.8 = .2 / 0.2 = 1.
-				//x = 1
-				//y = 1. -1 = 0 * 255 = 0
-
-				//store pixel data
-				uint32_t i = 0;
-				uint8_t* bytes = reinterpret_cast<uint8_t*>(&i);
-				bytes[0] = r; // PFG_RGBA8_UNORM_SRGB
-				bytes[1] = g;
-				bytes[2] = b;
-				bytes[3] = 255; // A = opaque
-
-				std::size_t index = &f - front;
-				converted[index] = i;
+				return rgb(r,g,b);
 
 				});
+
+			} break;
+
+		case ColorizeMode::GREYSCALE: {
+
+			forEachPixel([&](auto percent) {
+
+				uint8_t grey = 255 * percent;
+
+				return rgb(grey, grey, grey);
+
+				});
+			} break;
 		}
 	}
 
-	void saveToFile_colorize(const std::string& fileName, std::span<float> imageData, std::size_t w, std::size_t h, bool nrgb = true, double stripeNum = 1) {
+	void saveToFile_colorize(std::string fileName, std::span<float> imageData, std::size_t w, std::size_t h, ColorizeMode colorizeMode=ColorizeMode::NICKRGB, double stripeNum = 1) {
 
 		if (imageData.size() == 0) return;
+
+		auto colorizeModeStr = [&]() -> std::string {
+			switch (colorizeMode) {
+			case ColorizeMode::NICKRGB: return "nickrgb";
+			case ColorizeMode::ROYGBIV: return "roygbiv";
+			case ColorizeMode::GREYSCALE: return "greyscale";
+			}
+			return "unknown";
+		};
+
+		fileName = std::format("{}_{}_{}.bmp", fileName, colorizeModeStr(), stripeNum);
 
 		FreeImage_Initialise();
 
 		//convert to NICKRGB or ROYGBIV
 		std::vector<uint32_t> converted(imageData.size());
 
-		floatSpaceConvert(imageData, converted, nrgb, 0.0, 1.0, stripeNum);
+		floatSpaceConvert(imageData, converted, colorizeMode, 0, 1.0f, stripeNum);
 
 		uint8_t* bytes = reinterpret_cast<uint8_t*>(converted.data());
 		//converted data are four byte type (int32)
@@ -139,7 +179,7 @@ namespace FitsConverter {
 
 		FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, w, h, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
 
-		FreeImage_Save(FIF_BMP, convertedImage, (fileName + ".bmp").c_str(), 0);
+		FreeImage_Save(FIF_BMP, convertedImage, fileName.c_str(), 0);
 
 		FreeImage_Unload(convertedImage);
 		FreeImage_DeInitialise();
@@ -147,70 +187,90 @@ namespace FitsConverter {
 
 	void readFITSimageAndConvert(const std::string& fileName) {
 
-		fitsfile* fptr;
-		int status, nfound, anynull, bitpix, naxis;
-		long naxes[10], fpixel, nbuffer, npixels, ii;
+		auto writeColorizedImages = [&](auto idx, auto& image, auto width, auto height) {
 
-		#define buffsize 1000
-		float nullval, buffer[buffsize];
+			auto fileNameWithIdx = std::format("{}_{}", fileName, idx);
 
-		status = 0;
+			auto stripes = { 1,2,10,20,50,100 };
+			auto colorizeModes = { ColorizeMode::GREYSCALE, ColorizeMode::ROYGBIV, ColorizeMode::NICKRGB };
 
-		if (fits_open_file(&fptr, fileName.c_str(), READONLY, &status))
-			throw std::exception("failed to open fits");
+			std::for_each(std::execution::par, stripes.begin(), stripes.end(), [&](int stripeNum) {
 
-		char errmsg[FLEN_ERRMSG];
-		fits_get_errstatus(status, errmsg);
-		printf("Error %d: %s\n", status, errmsg);
+				for (auto colorizeMode : colorizeModes)
+					saveToFile_colorize(fileNameWithIdx, image, width, height, colorizeMode, stripeNum);
 
-		std::size_t idx = 0;
-		std::vector<float> image;
-		do {
-			fpixel = 1;
-			nullval = 0;
+				});
+			};
 
-			fits_get_img_param(fptr, 10, &bitpix, &naxis, naxes, &status);
+		auto readFitsImages = [&]() {
 
-			if (naxis != 0) {
+			fitsfile* fptr;
+			int status, nfound, anynull, bitpix, naxis;
+			long naxes[10], fpixel, nbuffer, npixels, ii;
 
-				std::size_t width = naxes[0], height = naxes[1];
-				npixels = width * height;
+			#define buffsize 1000
+			float nullval, buffer[buffsize];
 
-				image.reserve(width * height);
-				image.clear();
+			status = 0;
 
-				while (npixels > 0) {
+			if (fits_open_file(&fptr, fileName.c_str(), READONLY, &status))
+				throw std::exception("failed to open fits");
 
-					nbuffer = npixels;
-					if (npixels > buffsize)
-						nbuffer = buffsize;
+			char errmsg[FLEN_ERRMSG];
+			fits_get_errstatus(status, errmsg);
+			printf("Error %d: %s\n", status, errmsg);
 
-					if (fits_read_img(fptr, TFLOAT, fpixel, nbuffer, &nullval,
-						buffer, &anynull, &status))
+			std::size_t idx = 0;
+			std::vector<float> image;
+			do {
 
-						throw std::exception("fits read");
+				fpixel = 1;
+				nullval = 0;
 
-					for (ii = 0; ii < nbuffer; ii++)
-						image.push_back(buffer[ii]);
+				fits_get_img_param(fptr, 10, &bitpix, &naxis, naxes, &status);
 
-					npixels -= nbuffer;
-					fpixel += nbuffer;
+				if (naxis != 0) {
+
+					std::size_t width = naxes[0], height = naxes[1];
+					npixels = width * height;
+
+					image.reserve(width * height);
+					image.clear();
+
+					while (npixels > 0) {
+
+						nbuffer = npixels;
+						if (npixels > buffsize)
+							nbuffer = buffsize;
+
+						if (fits_read_img(fptr, TFLOAT, fpixel, nbuffer, &nullval,
+							buffer, &anynull, &status))
+
+							throw std::exception("fits read");
+
+						for (ii = 0; ii < nbuffer; ii++)
+							image.push_back(buffer[ii]);
+
+						npixels -= nbuffer;
+						fpixel += nbuffer;
+					}
+
+					writeColorizedImages(idx, image, width, height);
+
 				}
+				fits_movrel_hdu(fptr, 1, NULL, &status);
 
-				for (auto stripeNum : { 1,2,10,20,50,100 }) {
+				++idx;
+			} while (status != END_OF_FILE);
 
-					saveToFile_colorize(std::format("{}_nickrgb{}_{}", fileName, idx, stripeNum), image, width, height, true, stripeNum);
-					saveToFile_colorize(std::format("{}_roygbiv{}_{}", fileName, idx, stripeNum), image, width, height, false, stripeNum);
-				}
-			}
-			fits_movrel_hdu(fptr, 1, NULL, &status);
+			status = 0;
 
-			++idx;
-		} while (status != END_OF_FILE);
-		status = 0;
+			if (fits_close_file(fptr, &status))
+				throw std::exception("fits close");
+			};
 
-		if (fits_close_file(fptr, &status))
-			throw std::exception("fits close");
+
+		readFitsImages();
 	}
 };
 

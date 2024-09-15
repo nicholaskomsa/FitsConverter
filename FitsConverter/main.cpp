@@ -5,7 +5,7 @@
 
 int main(){
 
-    FitsConverter::readFITSimageAndConvert(".//spaceimages//AIA20230426_162100_0304.fits");
+    FitsConverter::readFITSimageAndConvert(".//spaceimages//m42proc.fits");
 
     std::cout << "\nprogram finished\n";
 }
