@@ -208,17 +208,13 @@ namespace FitsConverter {
 			int status, nfound, anynull, bitpix, naxis;
 			long naxes[10], fpixel, nbuffer, npixels, ii;
 
-			#define buffsize 1000
+			constexpr long buffsize = 1000;
 			float nullval, buffer[buffsize];
 
 			status = 0;
 
 			if (fits_open_file(&fptr, fileName.c_str(), READONLY, &status))
 				throw std::exception("failed to open fits");
-
-			char errmsg[FLEN_ERRMSG];
-			fits_get_errstatus(status, errmsg);
-			printf("Error %d: %s\n", status, errmsg);
 
 			std::size_t idx = 0;
 			std::vector<float> image;
