@@ -69,7 +69,7 @@ namespace FitsConverter {
 
 			std::uint32_t rgba = 0;
 			std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
-			bytes[0] = r; // PFG_RGBA8_UNORM_SRGB
+			bytes[0] = r; //PFG_BGRA8_UNORM_SRGB
 			bytes[1] = g;
 			bytes[2] = b;
 
