@@ -19,12 +19,13 @@ namespace FitsConverter {
 		GREYSCALE
 	};
 
-	void floatSpaceConvert(const std::span<float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1) {
+	void floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1) {
 
 		auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
 
-			double min = *std::min_element(data.begin(), data.end());
-			double max = *std::max_element(data.begin(), data.end());
+			auto minmax = std::minmax_element(data.begin(), data.end()); 
+			auto min = *minmax.first, max = *minmax.second;
+
 			double distance = max - min;
 
 			double viewMin = min + distance * startPercent;
@@ -42,8 +43,7 @@ namespace FitsConverter {
 
 		auto convertToGreyScale = [&](double f)->double {
 
-			f = std::min(f, viewMax);
-			f = std::max(f, viewMin);
+			f = std::clamp(f, viewMin, viewMax);
 
 			double percent = 1.0;
 
@@ -61,10 +61,10 @@ namespace FitsConverter {
 
 		auto clearAlpha = [&](uint32_t& i) {
 			reinterpret_cast<uint8_t*>(&i)[3] = 0;
-			};
+		};
 		auto setOpaque = [&](uint32_t& i) {
 			reinterpret_cast<uint8_t*>(&i)[3] = 255;
-			};		
+		};		
 		auto rgb = [&](std::uint8_t r, std::uint8_t g, std::uint8_t b) {
 
 			std::uint32_t rgba = 0;
@@ -74,7 +74,7 @@ namespace FitsConverter {
 			bytes[2] = b;
 
 			return rgba;
-			};
+		};
 
 		auto forEachPixel = [&](auto&& colorize) {
 
@@ -118,9 +118,9 @@ namespace FitsConverter {
 				uint8_t r = 0, g = 0, b = 0;
 
 				/*plot short rainbow RGB*/
-				double a = (1.0 - percent) / 0.20;	//invert and group
+				float a = (1.0 - percent) / 0.20;	//invert and group
 				int X = std::floor(a);	//this is the integer part
-				double Y = std::floor(255.0 * (a - X)); //fractional part from 0 to 255
+				float Y = std::floor(255.0 * (a - X)); //fractional part from 0 to 255
 				switch (X) {
 				case 0: r = 255; g = Y; b = 0; break;
 				case 1: r = 255 - Y; g = 255; b = 0; break;
@@ -267,7 +267,7 @@ namespace FitsConverter {
 
 			if (fits_close_file(fptr, &status))
 				throw std::exception("fits close");
-			};
+		};
 
 
 		readFitsImages();
