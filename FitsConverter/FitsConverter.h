@@ -32,7 +32,9 @@ namespace FitsConverter {
 
 	auto nrgb = [&](auto percent)->std::uint32_t {
 
-		constexpr const std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 8 };
+		//produce a three bytes (rgb) max value
+		constexpr std::uint32_t maxValue = {std::numeric_limits<std::uint32_t>::max() << 8 >> 8};
+
 		return maxValue * percent;
 		};
 
