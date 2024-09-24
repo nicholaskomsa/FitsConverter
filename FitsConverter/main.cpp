@@ -5,7 +5,7 @@
 
 int main(){
 
-    FitsConverter::readFITSimagesAndColorize(".//spaceimages//aia.lev1.335A_2023-03-30T12_00_00.63Z.image_lev1.fits");
+    FitsConverter::readFITSimagesAndColorize(".//spaceimages//m42_Grayscale.fit");
 
     std::cout << "\nprogram finished\n";
 }

@@ -210,7 +210,7 @@ namespace FitsConverter {
 
 					floatSpaceConvert(image, converted, colorizeMode, 0.0f, 1.0f, stripeNum);
 
-					auto completeFileNameWithColorMode = std::format("{}_{}_{}.bmp", fileName, colorizeModeStr(colorizeMode), stripeNum);
+					auto completeFileNameWithColorMode = std::format("{}_{}_{}.bmp", fileNameWithIdx, colorizeModeStr(colorizeMode), stripeNum);
 					saveToBmpFile(completeFileNameWithColorMode, converted);
 				}
 
