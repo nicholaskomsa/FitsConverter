@@ -19,6 +19,50 @@ namespace FitsConverter {
 		GREYSCALE
 	};
 
+	std::uint32_t rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+
+		std::uint32_t rgba = 0;
+		std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
+		bytes[0] = r; //PFG_BGRA8_UNORM_SRGB
+		bytes[1] = g;
+		bytes[2] = b;
+
+		return rgba;
+	}
+
+	auto nrgb = [&](auto percent)->std::uint32_t {
+
+		constexpr const std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 8 };
+		return maxValue * percent;
+		};
+
+	auto roygbiv = [&](auto percent) {
+
+		uint8_t r = 0, g = 0, b = 0;
+
+		/*plot short rainbow RGB*/
+		float a = (1.0 - percent) / 0.20;	//invert and group
+		int X = std::floor(a);	//this is the integer part
+		float Y = std::floor(255.0 * (a - X)); //fractional part from 0 to 255
+		switch (X) {
+		case 0: r = 255; g = Y; b = 0; break;
+		case 1: r = 255 - Y; g = 255; b = 0; break;
+		case 2: r = 0; g = 255; b = Y; break;
+		case 3: r = 0; g = 255 - Y; b = 255; break;
+		case 4: r = Y; g = 0; b = 255; break;
+		case 5: r = 255; g = 0; b = 255; break;
+		}
+
+		return rgb(r, g, b);
+		};
+
+	auto grayScale = [&](auto percent) {
+
+		constexpr const std::uint8_t maxValue = { std::numeric_limits<std::uint8_t>::max() };
+		std::uint8_t gray =  maxValue * percent;
+		return rgb(gray, gray, gray);
+		};
+
 	void floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1) {
 
 		auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
@@ -57,22 +101,9 @@ namespace FitsConverter {
 			return percent;
 		};
 
-		auto clearAlpha = [&](uint32_t& i) {
-			reinterpret_cast<uint8_t*>(&i)[3] = 0;
-		};
-		auto setOpaque = [&](uint32_t& i) {
-			reinterpret_cast<uint8_t*>(&i)[3] = 255;
+		auto setOpaque = [&](std::uint32_t& p) {
+			reinterpret_cast<uint8_t*>(&p)[3] = 255;
 		};		
-		auto rgb = [&](std::uint8_t r, std::uint8_t g, std::uint8_t b) {
-
-			std::uint32_t rgba = 0;
-			std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
-			bytes[0] = r; //PFG_BGRA8_UNORM_SRGB
-			bytes[1] = g;
-			bytes[2] = b;
-
-			return rgba;
-		};
 
 		auto forEachPixel = [&](auto&& colorize) {
 
@@ -81,7 +112,7 @@ namespace FitsConverter {
 
 				auto percent = convertToGreyScale(f);
 
-				std::uint32_t rgba = colorize(percent);
+				auto rgba = colorize(percent);
 
 				//we want these pixels to be defined as completly non-transparent
 				setOpaque(rgba);
@@ -94,55 +125,20 @@ namespace FitsConverter {
 		switch (colorMode) {
 		case ColorizeMode::NICKRGB:{
 
-			uint32_t intMax = std::numeric_limits<uint32_t>::max();//max will use alpha
-			//we want to perfectly fit into rgb space, so
-			//get rid of alpha channel, rgb remains, a = 0 
-			clearAlpha(intMax);
+			forEachPixel(nrgb);
 
-			forEachPixel([&](auto percent) {
-
-				//this is the nickrgb transform
-				//project onto integer	// int RGB
-
-				return intMax * percent;
-
-				});
 			}break;
 
 		case ColorizeMode::ROYGBIV: {
 			
-			forEachPixel([&](auto percent) {
-
-				uint8_t r = 0, g = 0, b = 0;
-
-				/*plot short rainbow RGB*/
-				float a = (1.0 - percent) / 0.20;	//invert and group
-				int X = std::floor(a);	//this is the integer part
-				float Y = std::floor(255.0 * (a - X)); //fractional part from 0 to 255
-				switch (X) {
-				case 0: r = 255; g = Y; b = 0; break;
-				case 1: r = 255 - Y; g = 255; b = 0; break;
-				case 2: r = 0; g = 255; b = Y; break;
-				case 3: r = 0; g = 255 - Y; b = 255; break;
-				case 4: r = Y; g = 0; b = 255; break;
-				case 5: r = 255; g = 0; b = 255; break;
-				}
-
-				return rgb(r,g,b);
-
-				});
+			forEachPixel(roygbiv);
 
 			} break;
 
 		case ColorizeMode::GREYSCALE: {
 
-			forEachPixel([&](auto percent) {
+			forEachPixel(grayScale);
 
-				uint8_t grey = 255 * percent;
-
-				return rgb(grey, grey, grey);
-
-				});
 			} break;
 		}
 	}
@@ -264,7 +260,6 @@ namespace FitsConverter {
 			if (fits_close_file(fptr, &status))
 				throw std::exception("fits close");
 		};
-
 
 		readFitsImages();
 
