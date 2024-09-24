@@ -33,7 +33,7 @@ namespace FitsConverter {
 	auto nrgb = [&](auto percent)->std::uint32_t {
 
 		//produce a three bytes (rgb) max value
-		constexpr std::uint32_t maxValue = {std::numeric_limits<std::uint32_t>::max() << 8 >> 8};
+		constexpr std::uint32_t maxValue = {std::numeric_limits<std::uint32_t>::max() >> 8};
 
 		return maxValue * percent;
 		};
@@ -60,7 +60,7 @@ namespace FitsConverter {
 
 	auto grayScale = [&](auto percent) {
 
-		constexpr const std::uint8_t maxValue = { std::numeric_limits<std::uint8_t>::max() };
+		constexpr std::uint8_t maxValue = { std::numeric_limits<std::uint8_t>::max() };
 		std::uint8_t gray =  maxValue * percent;
 		return rgb(gray, gray, gray);
 		};
