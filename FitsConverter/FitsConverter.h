@@ -11,12 +11,15 @@
 #include <algorithm>
 #include <format>
 
+
 namespace FitsConverter {
 
+	//converts fits FLOAT images to each colorize mode
 	enum class ColorizeMode {
 		NICKRGB,
 		ROYGBIV,
-		GREYSCALE
+		GREYSCALE,
+		BINARY
 	};
 
 	std::uint32_t rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
@@ -33,7 +36,7 @@ namespace FitsConverter {
 	auto nrgb = [&](auto percent)->std::uint32_t {
 
 		//produce a three bytes (rgb) max value
-		constexpr std::uint32_t maxValue = {std::numeric_limits<std::uint32_t>::max() >> 8};
+		constexpr std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 8 };
 
 		return maxValue * percent;
 		};
@@ -60,10 +63,20 @@ namespace FitsConverter {
 
 	auto grayScale = [&](auto percent) {
 
-		constexpr std::uint8_t maxValue = { std::numeric_limits<std::uint8_t>::max() };
-		std::uint8_t gray =  maxValue * percent;
+		constexpr std::uint8_t maxValue = {  std::numeric_limits<std::uint8_t>::max() };
+		std::uint8_t gray = maxValue * percent;
 		return rgb(gray, gray, gray);
+
 		};
+
+	auto binary = [&](auto percent) {
+
+		constexpr std::uint8_t maxValue = { 1 };
+		std::uint8_t gray = percent >= 0.5 ? 255 : 0;
+		return rgb(gray, gray, gray);
+
+		};
+
 
 	void floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1) {
 
@@ -142,6 +155,12 @@ namespace FitsConverter {
 			forEachPixel(grayScale);
 
 			} break;
+
+		case ColorizeMode::BINARY: {
+
+			forEachPixel(binary);
+
+		} break;
 		}
 	}
 
@@ -169,13 +188,14 @@ namespace FitsConverter {
 			auto fileNameWithIdx = std::format("{}_{}", fileName, idx);
 
 			auto stripes = { 1,2,10,20,50,100 };
-			auto colorizeModes = { ColorizeMode::GREYSCALE, ColorizeMode::ROYGBIV, ColorizeMode::NICKRGB };
+			auto colorizeModes = { ColorizeMode::GREYSCALE, ColorizeMode::ROYGBIV, ColorizeMode::NICKRGB, ColorizeMode::BINARY };
 
 			auto colorizeModeStr = [&](auto colorizeMode) {
 				switch (colorizeMode) {
 				case ColorizeMode::NICKRGB: return "nickrgb";
 				case ColorizeMode::ROYGBIV: return "roygbiv";
 				case ColorizeMode::GREYSCALE: return "greyscale";
+				case ColorizeMode::BINARY: return "binary";
 				}
 				return "unknown";
 				};
