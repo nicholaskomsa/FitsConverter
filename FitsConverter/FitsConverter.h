@@ -147,26 +147,26 @@ namespace FitsConverter {
 		}
 	}
 
-	void saveToBmpFile(std::string fileName, std::span<uint32_t> image, std::size_t w, std::size_t h) {
-
-		if (image.size() == 0) return;
-
-		uint8_t* bytes = reinterpret_cast<uint8_t*>(image.data());
-		//converted data are four byte type (int32)
-		//r g b a
-
-		int pitch = w * (32 / 8);
-
-		FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, w, h, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
-
-		FreeImage_Save(FIF_BMP, convertedImage, fileName.c_str(), 0);
-
-		FreeImage_Unload(convertedImage);
-	}
-
 	void readFITSimagesAndColorize(const std::string& fileName) {
 
 		auto writeColorizedImages = [&](auto idx, auto& image, auto width, auto height) {
+
+			if (image.size() == 0) return;
+
+			auto saveToBmpFile = [&](std::string fileName, std::span<uint32_t> image) {
+
+				uint8_t* bytes = reinterpret_cast<uint8_t*>(image.data());
+				//converted data are four byte type (int32)
+				//r g b a
+
+				int pitch = width * (32 / 8);
+
+				FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, width, height, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
+
+				FreeImage_Save(FIF_BMP, convertedImage, fileName.c_str(), 0);
+
+				FreeImage_Unload(convertedImage);
+				};
 
 			auto fileNameWithIdx = std::format("{}_{}", fileName, idx);
 
@@ -193,7 +193,7 @@ namespace FitsConverter {
 					floatSpaceConvert(image, converted, colorizeMode, 0.0f, 1.0f, stripeNum);
 
 					auto completeFileNameWithColorMode = std::format("{}_{}_{}.bmp", fileName, colorizeModeStr(colorizeMode), stripeNum);
-					saveToBmpFile(completeFileNameWithColorMode, converted, width, height);
+					saveToBmpFile(completeFileNameWithColorMode, converted);
 				}
 
 				});
