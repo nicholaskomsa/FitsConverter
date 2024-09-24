@@ -43,8 +43,6 @@ namespace FitsConverter {
 
 		auto convertToGreyScale = [&](double f)->double {
 
-			f = std::clamp(f, viewMin, viewMax);
-
 			double percent = 1.0;
 
 			f -= viewMin;
@@ -149,29 +147,11 @@ namespace FitsConverter {
 		}
 	}
 
-	void saveToFile_colorize(std::string fileName, std::span<float> imageData, std::size_t w, std::size_t h, ColorizeMode colorizeMode=ColorizeMode::NICKRGB, double stripeNum = 1) {
+	void saveToBmpFile(std::string fileName, std::span<uint32_t> image, std::size_t w, std::size_t h) {
 
-		if (imageData.size() == 0) return;
+		if (image.size() == 0) return;
 
-		auto colorizeModeStr = [&]() -> std::string {
-			switch (colorizeMode) {
-			case ColorizeMode::NICKRGB: return "nickrgb";
-			case ColorizeMode::ROYGBIV: return "roygbiv";
-			case ColorizeMode::GREYSCALE: return "greyscale";
-			}
-			return "unknown";
-		};
-
-		fileName = std::format("{}_{}_{}.bmp", fileName, colorizeModeStr(), stripeNum);
-
-		FreeImage_Initialise();
-
-		//convert to NICKRGB or ROYGBIV
-		std::vector<uint32_t> converted(imageData.size());
-
-		floatSpaceConvert(imageData, converted, colorizeMode, 0, 1.0f, stripeNum);
-
-		uint8_t* bytes = reinterpret_cast<uint8_t*>(converted.data());
+		uint8_t* bytes = reinterpret_cast<uint8_t*>(image.data());
 		//converted data are four byte type (int32)
 		//r g b a
 
@@ -182,10 +162,9 @@ namespace FitsConverter {
 		FreeImage_Save(FIF_BMP, convertedImage, fileName.c_str(), 0);
 
 		FreeImage_Unload(convertedImage);
-		FreeImage_DeInitialise();
 	}
 
-	void readFITSimageAndConvert(const std::string& fileName) {
+	void readFITSimagesAndColorize(const std::string& fileName) {
 
 		auto writeColorizedImages = [&](auto idx, auto& image, auto width, auto height) {
 
@@ -194,12 +173,33 @@ namespace FitsConverter {
 			auto stripes = { 1,2,10,20,50,100 };
 			auto colorizeModes = { ColorizeMode::GREYSCALE, ColorizeMode::ROYGBIV, ColorizeMode::NICKRGB };
 
+			auto colorizeModeStr = [&](auto colorizeMode) {
+				switch (colorizeMode) {
+				case ColorizeMode::NICKRGB: return "nickrgb";
+				case ColorizeMode::ROYGBIV: return "roygbiv";
+				case ColorizeMode::GREYSCALE: return "greyscale";
+				}
+				return "unknown";
+				};
+
+			FreeImage_Initialise();
+
 			std::for_each(std::execution::par, stripes.begin(), stripes.end(), [&](int stripeNum) {
 
-				for (auto colorizeMode : colorizeModes)
-					saveToFile_colorize(fileNameWithIdx, image, width, height, colorizeMode, stripeNum);
+				std::vector<uint32_t> converted(image.size());
+
+				for (auto colorizeMode : colorizeModes) {
+
+					floatSpaceConvert(image, converted, colorizeMode, 0.0f, 1.0f, stripeNum);
+
+					auto completeFileNameWithColorMode = std::format("{}_{}_{}.bmp", fileName, colorizeModeStr(colorizeMode), stripeNum);
+					saveToBmpFile(completeFileNameWithColorMode, converted, width, height);
+				}
 
 				});
+
+			FreeImage_DeInitialise();
+
 			};
 
 		auto readFitsImages = [&]() {
@@ -267,6 +267,7 @@ namespace FitsConverter {
 
 
 		readFitsImages();
+
 	}
 };
 
