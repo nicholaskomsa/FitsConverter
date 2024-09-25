@@ -17,6 +17,7 @@ namespace FitsConverter {
 	//converts fits FLOAT images to each colorize mode
 	enum class ColorizeMode {
 		NICKRGB,
+		SHORTNRGB,
 		ROYGBIV,
 		GREYSCALE,
 		BINARY
@@ -41,6 +42,13 @@ namespace FitsConverter {
 		return maxValue * percent;
 		};
 
+	auto snrgb = [&](auto percent)->std::uint32_t {
+
+		//produce a three bytes (rgb) max value
+		constexpr std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 16 };
+
+		return maxValue * percent;
+		};
 	auto roygbiv = [&](auto percent) {
 
 		uint8_t r = 0, g = 0, b = 0;
@@ -71,8 +79,10 @@ namespace FitsConverter {
 
 	auto binary = [&](auto percent) {
 
-		constexpr std::uint8_t maxValue = { 1 };
-		std::uint8_t gray = percent >= 0.5 ? 255 : 0;
+		constexpr std::uint8_t maxValue = { std::numeric_limits<std::uint8_t>::max() };
+		//perrcent is between 0 and 1 so round to 0 or 1 and multiply by max value for either 0 or 255
+		std::uint8_t bit = std::round(percent);
+		std::uint8_t gray = maxValue * bit;
 		return rgb(gray, gray, gray);
 
 		};
@@ -161,6 +171,12 @@ namespace FitsConverter {
 			forEachPixel(binary);
 
 		} break;
+
+		case ColorizeMode::SHORTNRGB: {
+
+			forEachPixel(snrgb);
+
+		} break;
 		}
 	}
 
@@ -188,7 +204,7 @@ namespace FitsConverter {
 			auto fileNameWithIdx = std::format("{}_{}", fileName, idx);
 
 			auto stripes = { 1,2,10,20,50,100 };
-			auto colorizeModes = { ColorizeMode::GREYSCALE, ColorizeMode::ROYGBIV, ColorizeMode::NICKRGB, ColorizeMode::BINARY };
+			auto colorizeModes = { ColorizeMode::GREYSCALE, ColorizeMode::ROYGBIV, ColorizeMode::NICKRGB, ColorizeMode::BINARY, ColorizeMode::SHORTNRGB };
 
 			auto colorizeModeStr = [&](auto colorizeMode) {
 				switch (colorizeMode) {
@@ -196,6 +212,7 @@ namespace FitsConverter {
 				case ColorizeMode::ROYGBIV: return "roygbiv";
 				case ColorizeMode::GREYSCALE: return "greyscale";
 				case ColorizeMode::BINARY: return "binary";
+				case ColorizeMode::SHORTNRGB: return "snrgb";
 				}
 				return "unknown";
 				};

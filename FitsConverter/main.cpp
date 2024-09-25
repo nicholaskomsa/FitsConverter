@@ -5,7 +5,7 @@
 
 int main(){
 
-    FitsConverter::readFITSimagesAndColorize(".//spaceimages//m42_Grayscale.fit");
+    FitsConverter::readFITSimagesAndColorize(".//spaceimages//ngc2174_MonkeyHeadNebula.fits");
 
     std::cout << "\nprogram finished\n";
 }
