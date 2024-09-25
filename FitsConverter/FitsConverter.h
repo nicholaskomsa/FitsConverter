@@ -23,11 +23,12 @@ namespace FitsConverter {
 		BINARY
 	};
 
+
 	std::uint32_t rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
 
 		std::uint32_t rgba = 0;
 		std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
-		bytes[0] = r; //PFG_BGRA8_UNORM_SRGB
+		bytes[0] = r;
 		bytes[1] = g;
 		bytes[2] = b;
 
@@ -39,7 +40,8 @@ namespace FitsConverter {
 		//produce a three bytes (rgb) max value
 		constexpr std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 8 };
 
-		return maxValue * percent;
+		std::uint32_t value =  maxValue * percent;
+		return value;
 		};
 
 	auto snrgb = [&](auto percent)->std::uint32_t {
@@ -86,7 +88,6 @@ namespace FitsConverter {
 		return rgb(gray, gray, gray);
 
 		};
-
 
 	void floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1) {
 
@@ -194,6 +195,19 @@ namespace FitsConverter {
 
 				int pitch = width * (32 / 8);
 
+				//freeimage is writing in bgra format
+				auto abgr = [&](std::uint32_t rgba) {
+
+					std::uint32_t tmp = rgba;
+					std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&tmp);
+					std::swap(bytes[0], bytes[2]);
+
+					return tmp;
+					};
+
+				std::transform(image.begin(), image.end(), image.begin(), abgr);
+
+				//correct byte order for free image write
 				FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, width, height, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
 
 				FreeImage_Save(FIF_BMP, convertedImage, fileName.c_str(), 0);

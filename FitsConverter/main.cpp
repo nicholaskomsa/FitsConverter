@@ -5,7 +5,7 @@
 
 int main(){
 
-    FitsConverter::readFITSimagesAndColorize(".//spaceimages//ngc2174_MonkeyHeadNebula.fits");
+    FitsConverter::readFITSimagesAndColorize(".//spaceimages//m101_ThePinwheelGalaxy.fits");
 
     std::cout << "\nprogram finished\n";
 }
