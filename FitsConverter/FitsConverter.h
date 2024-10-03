@@ -196,7 +196,7 @@ namespace FitsConverter {
 				int pitch = width * (32 / 8);
 
 				//freeimage is writing in bgra format
-				auto abgr = [&](std::uint32_t rgba) {
+				auto bgra = [&](std::uint32_t rgba) {
 
 					std::uint32_t tmp = rgba;
 					std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&tmp);
@@ -205,7 +205,7 @@ namespace FitsConverter {
 					return tmp;
 					};
 
-				std::transform(image.begin(), image.end(), image.begin(), abgr);
+				std::transform(image.begin(), image.end(), image.begin(), bgra);
 
 				//correct byte order for free image write
 				FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, width, height, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
